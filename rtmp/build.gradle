@@ -8,16 +8,23 @@ android {
   defaultConfig {
     minSdkVersion 16
     targetSdkVersion 30
-    versionCode 199
-    versionName "1.9.9"
+    versionCode 200
+    versionName "1.10.0"
   }
   buildTypes {
     release {
       minifyEnabled false
     }
   }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_1_8
+    targetCompatibility JavaVersion.VERSION_1_8
+  }
+
 }
 
 dependencies {
-  api 'androidx.annotation:annotation:1.1.0'
+  api 'androidx.annotation:annotation:1.2.0'
+  implementation 'org.apache.commons:commons-collections4:4.4'
 }
