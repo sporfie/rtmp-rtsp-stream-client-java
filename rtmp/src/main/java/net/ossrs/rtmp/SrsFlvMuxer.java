@@ -1092,6 +1092,7 @@ public class SrsFlvMuxer {
     }
 
     private void flvFrameCacheAdd(SrsFlvFrame frame) {
+      synchronized (mQueuedBytesStats) { mQueuedBytes += frame.flvTag.size(); }
       boolean wasFrameAdded = frame.is_video() ? mFlvVideoTagCache.offer(frame) : mFlvAudioTagCache.offer(frame);
       if(!wasFrameAdded) {
         Log.i(TAG, "frame discarded");
@@ -1100,8 +1101,6 @@ public class SrsFlvMuxer {
         } else {
           mDroppedAudioFrames++;
         }
-      } else {
-        synchronized (mQueuedBytesStats) { mQueuedBytes += frame.flvTag.size(); }
       }
     }
   }
