@@ -8,11 +8,8 @@ import android.util.Log;
 import com.github.faucamp.simplertmp.DefaultRtmpPublisher;
 import com.github.faucamp.simplertmp.RtmpPublisher;
 
-import org.apache.commons.collections4.queue.CircularFifoQueue;
-
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -88,11 +85,8 @@ public class SrsFlvMuxer {
   private long mDroppedAudioFrames = 0;
   private long mDroppedVideoFrames = 0;
   private long startTs = 0;
-  protected long mStatAccumulationStartTime = 0;
-  protected Long mQueuedBytes = 0L;
-  protected Long mSentBytes = 0L;
-  protected final CircularFifoQueue<Long> mQueuedBytesStats = new CircularFifoQueue<>(STATS_QUEUE_SIZE);
-  protected final CircularFifoQueue<Long> mSentBytesStats = new CircularFifoQueue<>(STATS_QUEUE_SIZE);
+
+  protected ConnectionStatistics statistics;
 
   /**
    * constructor.
@@ -192,16 +186,8 @@ public class SrsFlvMuxer {
     mDroppedVideoFrames = 0;
   }
 
-  public Long[] getQueuedBytesStats() {
-    synchronized (mQueuedBytesStats) {
-      return mQueuedBytesStats.toArray(new Long[mQueuedBytesStats.size()]);
-    }
-  }
-
-  public Long[] getSentBytesStats() {
-    synchronized (mSentBytesStats) {
-      return mSentBytesStats.toArray(new Long[mSentBytesStats.size()]);
-    }
+  public ConnectionStatistics getStatistics() {
+    return statistics;
   }
 
   /**
@@ -281,12 +267,12 @@ public class SrsFlvMuxer {
             frame.flvTag.array().length));
       }
       publisher.publishVideoData(frame.flvTag.array(), frame.flvTag.size(), dts);
-      synchronized (mSentBytesStats) { mSentBytes += frame.flvTag.size(); }
+      if (statistics != null) statistics.addSent(frame.flvTag.size());
       mVideoAllocator.release(frame.flvTag);
       mVideoFramesSent++;
     } else if (frame.is_audio()) {
       publisher.publishAudioData(frame.flvTag.array(), frame.flvTag.size(), dts);
-      synchronized (mSentBytesStats) { mSentBytes += frame.flvTag.size(); }
+      if (statistics != null) statistics.addSent(frame.flvTag.size());
       mAudioAllocator.release(frame.flvTag);
       mAudioFramesSent++;
     }
@@ -294,33 +280,6 @@ public class SrsFlvMuxer {
 
   public void start(final String rtmpUrl) {
     start(rtmpUrl, false);
-  }
-
-  protected void updateStats() {
-    long now = System.currentTimeMillis();
-    if (now - mStatAccumulationStartTime < STATS_PERIOD_MS)
-      return;
-
-    synchronized (mQueuedBytesStats) {
-      mQueuedBytesStats.add(mQueuedBytes);
-      mQueuedBytes = 0L;
-    }
-    synchronized (mSentBytesStats) {
-      mSentBytesStats.add(mSentBytes);
-      mSentBytes = 0L;
-    }
-    mStatAccumulationStartTime = now;
-
-//    StringBuilder builder = new StringBuilder();
-//    Long[] queued = getQueuedBytesStats();
-//    Long[] sent = getSentBytesStats();
-//    for(int i = 0; i < queued.length; i++) {
-//      builder.append(queued[i]);
-//      builder.append("/");
-//      builder.append(sent[i]);
-//      builder.append(" ");
-//    }
-//    Log.i(TAG, "SrsFlvMuxer stats: "+builder.toString());
   }
 
   /**
@@ -339,7 +298,7 @@ public class SrsFlvMuxer {
         if (isRetry) flv.retry();
         reTries = numRetry;
         connectCheckerRtmp.onConnectionSuccessRtmp();
-        mStatAccumulationStartTime = System.currentTimeMillis();
+        if (statistics != null) statistics.start();
         while (!Thread.interrupted()) {
           try {
             SrsFlvFrame frame = mFlvAudioTagCache.poll(1, TimeUnit.MILLISECONDS);
@@ -351,7 +310,6 @@ public class SrsFlvMuxer {
             if (frame != null) {
               sendFlvTag(frame);
             }
-            updateStats();
           } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
           }
@@ -359,6 +317,7 @@ public class SrsFlvMuxer {
       }
     });
     worker.start();
+    statistics = new ConnectionStatistics(STATS_QUEUE_SIZE, STATS_PERIOD_MS);
   }
 
   public void stop() {
@@ -370,6 +329,8 @@ public class SrsFlvMuxer {
    */
   private void stop(final ConnectCheckerRtmp connectCheckerRtmp) {
     startTs = 0;
+    statistics.stop();
+    statistics = null;
     handler.removeCallbacks(runnable);
     if (worker != null) {
       worker.interrupt();
@@ -1092,7 +1053,7 @@ public class SrsFlvMuxer {
     }
 
     private void flvFrameCacheAdd(SrsFlvFrame frame) {
-      synchronized (mQueuedBytesStats) { mQueuedBytes += frame.flvTag.size(); }
+      if (statistics != null) statistics.addQueued(frame.flvTag.size());
       boolean wasFrameAdded = frame.is_video() ? mFlvVideoTagCache.offer(frame) : mFlvAudioTagCache.offer(frame);
       if(!wasFrameAdded) {
         Log.i(TAG, "frame discarded");
