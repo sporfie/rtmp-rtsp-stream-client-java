@@ -88,6 +88,31 @@ public class MicrophoneManager {
     return created;
   }
 
+  public boolean createMicrophone(int audioSource, int sampleRate, boolean isStereo,
+                                  boolean echoCanceler, boolean noiseSuppressor, AudioRecord ar) {
+    try {
+        audioRecord = ar;
+      audioPostProcessEffect = new AudioPostProcessEffect(audioRecord.getAudioSessionId());
+      if (echoCanceler) audioPostProcessEffect.enableEchoCanceler();
+      if (noiseSuppressor) audioPostProcessEffect.enableNoiseSuppressor();
+      String chl = (isStereo) ? "Stereo" : "Mono";
+      if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
+        throw new IllegalArgumentException("Some parameters specified is not valid");
+      }
+      Log.i(TAG, "Microphone created, " + sampleRate + "hz, " + chl);
+      created = true;
+    } catch (IllegalArgumentException e) {
+      Log.e(TAG, "create microphone error", e);
+    }
+    return created;
+  }
+
+  public AudioRecord getAudioRecord(int audioSource, int sampleRate, boolean isStereo) {
+    this.sampleRate = sampleRate;
+    channel = isStereo ? AudioFormat.CHANNEL_IN_STEREO : AudioFormat.CHANNEL_IN_MONO;
+    return new AudioRecord(audioSource, sampleRate, channel, audioFormat, getPcmBufferSize());
+  }
+
   /**
    * Create audio record with params and AudioPlaybackCaptureConfig used for capturing internal
    * audio
