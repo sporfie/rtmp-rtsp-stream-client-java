@@ -1,6 +1,9 @@
 package com.pedro.encoder.input.audio;
 
+import android.content.Context;
+import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
+import android.media.AudioManager;
 import android.media.AudioPlaybackCaptureConfiguration;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
@@ -9,6 +12,9 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
+
+import androidx.annotation.RequiresApi;
+
 import com.pedro.encoder.Frame;
 import java.nio.ByteBuffer;
 
@@ -88,29 +94,9 @@ public class MicrophoneManager {
     return created;
   }
 
-  public boolean createMicrophone(int audioSource, int sampleRate, boolean isStereo,
-                                  boolean echoCanceler, boolean noiseSuppressor, AudioRecord ar) {
-    try {
-        audioRecord = ar;
-      audioPostProcessEffect = new AudioPostProcessEffect(audioRecord.getAudioSessionId());
-      if (echoCanceler) audioPostProcessEffect.enableEchoCanceler();
-      if (noiseSuppressor) audioPostProcessEffect.enableNoiseSuppressor();
-      String chl = (isStereo) ? "Stereo" : "Mono";
-      if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
-        throw new IllegalArgumentException("Some parameters specified is not valid");
-      }
-      Log.i(TAG, "Microphone created, " + sampleRate + "hz, " + chl);
-      created = true;
-    } catch (IllegalArgumentException e) {
-      Log.e(TAG, "create microphone error", e);
-    }
-    return created;
-  }
-
-  public AudioRecord getAudioRecord(int audioSource, int sampleRate, boolean isStereo) {
-    this.sampleRate = sampleRate;
-    channel = isStereo ? AudioFormat.CHANNEL_IN_STEREO : AudioFormat.CHANNEL_IN_MONO;
-    return new AudioRecord(audioSource, sampleRate, channel, audioFormat, getPcmBufferSize());
+  @RequiresApi(api = Build.VERSION_CODES.M)
+  public void setAudioDevice(AudioDeviceInfo audioDevice) {
+    audioRecord.setPreferredDevice(audioDevice);
   }
 
   /**
