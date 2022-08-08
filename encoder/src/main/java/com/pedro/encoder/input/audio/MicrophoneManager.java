@@ -96,7 +96,7 @@ public class MicrophoneManager {
 
   @RequiresApi(api = Build.VERSION_CODES.M)
   public void setAudioDevice(AudioDeviceInfo audioDevice) {
-    audioRecord.setPreferredDevice(audioDevice);
+      audioRecord.setPreferredDevice(audioDevice);
   }
 
   /**
