@@ -232,7 +232,9 @@ public class MicrophoneManager {
    * Get PCM buffer size
    */
   private int getPcmBufferSize() {
-    BUFFER_SIZE = AudioRecord.getMinBufferSize(sampleRate, channel, audioFormat);
+    // Set the buffer size to three times the minimal value, to ensure that we
+    // have enough. It may solve a crappy sound issue on Android 13.
+    BUFFER_SIZE = AudioRecord.getMinBufferSize(sampleRate, channel, audioFormat)*3;
     pcmBuffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
     pcmBufferMuted = new byte[BUFFER_SIZE];
     return BUFFER_SIZE * 5;
