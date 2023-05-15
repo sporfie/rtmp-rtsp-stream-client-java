@@ -193,7 +193,7 @@ public class MicrophoneManager {
   /**
    * @return Object with size and PCM buffer data
    */
-  private Frame read() {
+  protected Frame read() {
     int size = audioRecord.read(pcmBuffer, 0, pcmBuffer.length);
     if (size < 0) return null;
     return new Frame(muted ? pcmBufferMuted : customAudioEffect.process(pcmBuffer), 0, size);
