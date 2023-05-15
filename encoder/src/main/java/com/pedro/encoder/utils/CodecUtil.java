@@ -3,6 +3,9 @@ package com.pedro.encoder.utils;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.os.Build;
+
+import androidx.annotation.RequiresApi;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -137,6 +140,16 @@ public class CodecUtil {
     return infos;
   }
 
+  @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+  public static boolean isCBRModeSupported(MediaCodecInfo mediaCodecInfo, String mime) {
+    MediaCodecInfo.CodecCapabilities codecCapabilities =
+            mediaCodecInfo.getCapabilitiesForType(mime);
+    MediaCodecInfo.EncoderCapabilities encoderCapabilities =
+            codecCapabilities.getEncoderCapabilities();
+    return encoderCapabilities.isBitrateModeSupported(
+            MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR);
+  }
+
   public static List<MediaCodecInfo> getAllCodecs(boolean filterBroken) {
     List<MediaCodecInfo> mediaCodecInfoList = new ArrayList<>();
     if (Build.VERSION.SDK_INT >= 21) {
@@ -153,15 +166,26 @@ public class CodecUtil {
     return filterBroken ? filterBrokenCodecs(mediaCodecInfoList) : mediaCodecInfoList;
   }
 
-  public static List<MediaCodecInfo> getAllHardwareEncoders(String mime) {
+  public static List<MediaCodecInfo> getAllHardwareEncoders(String mime, boolean cbrPriority) {
     List<MediaCodecInfo> mediaCodecInfoList = getAllEncoders(mime);
     List<MediaCodecInfo> mediaCodecInfoHardware = new ArrayList<>();
+    List<MediaCodecInfo> mediaCodecInfoHardwareCBR = new ArrayList<>();
     for (MediaCodecInfo mediaCodecInfo : mediaCodecInfoList) {
       if (isHardwareAccelerated(mediaCodecInfo)) {
         mediaCodecInfoHardware.add(mediaCodecInfo);
+        if (cbrPriority &&Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
+                && isCBRModeSupported(mediaCodecInfo, mime)) {
+          mediaCodecInfoHardwareCBR.add(mediaCodecInfo);
+        }
       }
     }
+    mediaCodecInfoHardware.removeAll(mediaCodecInfoHardwareCBR);
+    mediaCodecInfoHardware.addAll(0, mediaCodecInfoHardwareCBR);
     return mediaCodecInfoHardware;
+  }
+
+  public static List<MediaCodecInfo> getAllHardwareEncoders(String mime) {
+    return getAllHardwareEncoders(mime, false);
   }
 
   public static List<MediaCodecInfo> getAllHardwareDecoders(String mime) {
@@ -175,15 +199,26 @@ public class CodecUtil {
     return mediaCodecInfoHardware;
   }
 
-  public static List<MediaCodecInfo> getAllSoftwareEncoders(String mime) {
+  public static List<MediaCodecInfo> getAllSoftwareEncoders(String mime, boolean cbrPriority) {
     List<MediaCodecInfo> mediaCodecInfoList = getAllEncoders(mime);
     List<MediaCodecInfo> mediaCodecInfoSoftware = new ArrayList<>();
+    List<MediaCodecInfo> mediaCodecInfoSoftwareCBR = new ArrayList<>();
     for (MediaCodecInfo mediaCodecInfo : mediaCodecInfoList) {
       if (isSoftwareOnly(mediaCodecInfo)) {
         mediaCodecInfoSoftware.add(mediaCodecInfo);
+        if (cbrPriority &&Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
+                && isCBRModeSupported(mediaCodecInfo, mime)) {
+          mediaCodecInfoSoftwareCBR.add(mediaCodecInfo);
+        }
       }
     }
+    mediaCodecInfoSoftware.removeAll(mediaCodecInfoSoftwareCBR);
+    mediaCodecInfoSoftware.addAll(0, mediaCodecInfoSoftwareCBR);
     return mediaCodecInfoSoftware;
+  }
+
+  public static List<MediaCodecInfo> getAllSoftwareEncoders(String mime) {
+    return getAllSoftwareEncoders(mime, false);
   }
 
   public static List<MediaCodecInfo> getAllSoftwareDecoders(String mime) {
@@ -215,6 +250,21 @@ public class CodecUtil {
       }
     }
     return mediaCodecInfoList;
+  }
+
+  public static List<MediaCodecInfo> getAllEncoders(String mime, boolean hardwarePriority, boolean cbrPriority) {
+    List<MediaCodecInfo> mediaCodecInfoList = new ArrayList<>();
+    if (hardwarePriority) {
+      mediaCodecInfoList.addAll(getAllHardwareEncoders(mime, cbrPriority));
+      mediaCodecInfoList.addAll(getAllSoftwareEncoders(mime, cbrPriority));
+    } else {
+      mediaCodecInfoList.addAll(getAllEncoders(mime));
+    }
+    return mediaCodecInfoList;
+  }
+
+  public static List<MediaCodecInfo> getAllEncoders(String mime, boolean hardwarePriority) {
+    return getAllEncoders(mime, hardwarePriority, false);
   }
 
   /**
@@ -281,13 +331,49 @@ public class CodecUtil {
    */
   private static List<MediaCodecInfo> filterBrokenCodecs(List<MediaCodecInfo> codecs) {
     List<MediaCodecInfo> listFilter = new ArrayList<>();
+    List<MediaCodecInfo> listLowPriority = new ArrayList<>();
+    List<MediaCodecInfo> listUltraLowPriority = new ArrayList<>();
     for (MediaCodecInfo mediaCodecInfo : codecs) {
       if (isValid(mediaCodecInfo.getName())) {
         listFilter.add(mediaCodecInfo);
+        CodecPriority priority = checkCodecPriority(mediaCodecInfo.getName());
+        switch (priority) {
+          case ULTRA_LOW:
+            listUltraLowPriority.add(mediaCodecInfo);
+            break;
+          case LOW:
+            listLowPriority.add(mediaCodecInfo);
+            break;
+          case NORMAL:
+          default:
+            listFilter.add(mediaCodecInfo);
+            break;
+        }
       }
     }
+    listFilter.addAll(listLowPriority);
+    listFilter.addAll(listUltraLowPriority);
     return listFilter;
   }
+
+  private enum CodecPriority {
+    NORMAL, LOW, ULTRA_LOW
+  }
+
+  /**
+   * Few devices have codecs that is not working properly in few cases like using AWS MediaLive or YouTube
+   * but it is still usable in most of cases.
+   * @return priority level.
+   */
+  private static CodecPriority checkCodecPriority(String name) {
+    //maybe only broke on samsung with Android 12+ using YouTube and AWS MediaLive
+    // but set as ultra low priority in all cases.
+    if (name.equalsIgnoreCase("c2.sec.aac.encoder")) return CodecPriority.ULTRA_LOW;
+      //broke on few devices using YouTube and AWS MediaLive
+    else if (name.equalsIgnoreCase("omx.google.aac.encoder")) return CodecPriority.LOW;
+    else return CodecPriority.NORMAL;
+  }
+
 
   /**
    * For now, none broken codec reported.
