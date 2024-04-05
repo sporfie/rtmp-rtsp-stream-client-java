@@ -293,14 +293,17 @@ public class VideoEncoder extends BaseEncoder implements GetCameraData {
   protected MediaCodecInfo chooseEncoder(String mime) {
     List<MediaCodecInfo> mediaCodecInfoList;
     if (force == CodecUtil.Force.HARDWARE) {
-      mediaCodecInfoList = CodecUtil.getAllHardwareEncoders(mime);
+      mediaCodecInfoList = CodecUtil.getAllHardwareEncoders(mime, true);
     } else if (force == CodecUtil.Force.SOFTWARE) {
-      mediaCodecInfoList = CodecUtil.getAllSoftwareEncoders(mime);
+      mediaCodecInfoList = CodecUtil.getAllSoftwareEncoders(mime, true);
     } else {
-      mediaCodecInfoList = CodecUtil.getAllEncoders(mime);
+      //Priority: hardware CBR > hardware > software CBR > software
+      mediaCodecInfoList = CodecUtil.getAllEncoders(mime, true, true);
     }
+
+    Log.i(TAG, mediaCodecInfoList.size() + " encoders found");
     for (MediaCodecInfo mci : mediaCodecInfoList) {
-      Log.i(TAG, String.format("VideoEncoder %s", mci.getName()));
+      Log.i(TAG, "Encoder " + mci.getName());
       MediaCodecInfo.CodecCapabilities codecCapabilities = mci.getCapabilitiesForType(mime);
       for (int color : codecCapabilities.colorFormats) {
         Log.i(TAG, "Color supported: " + color);
@@ -309,7 +312,7 @@ public class VideoEncoder extends BaseEncoder implements GetCameraData {
         } else {
           //check if encoder support any yuv420 color
           if (color == FormatVideoEncoder.YUV420PLANAR.getFormatCodec()
-              || color == FormatVideoEncoder.YUV420SEMIPLANAR.getFormatCodec()) {
+                  || color == FormatVideoEncoder.YUV420SEMIPLANAR.getFormatCodec()) {
             return mci;
           }
         }

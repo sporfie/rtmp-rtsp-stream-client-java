@@ -47,7 +47,7 @@ allprojects {
   }
 }
 dependencies {
-  implementation 'com.github.sporfie.rtmp-rtsp-stream-client-java:rtplibrary:1.10.7'
+  implementation 'com.github.sporfie.rtmp-rtsp-stream-client-java:rtplibrary:1.10.8'
 }
 
 ```

@@ -229,7 +229,7 @@ public class MicrophoneManager {
    * Get PCM buffer size
    */
   private int getPcmBufferSize() {
-    BUFFER_SIZE = AudioRecord.getMinBufferSize(sampleRate, channel, audioFormat);
+    BUFFER_SIZE = AudioRecord.getMinBufferSize(sampleRate, channel, audioFormat)*3;
     pcmBuffer = new byte[BUFFER_SIZE];
     pcmBufferMuted = new byte[BUFFER_SIZE];
     return BUFFER_SIZE * 5;
